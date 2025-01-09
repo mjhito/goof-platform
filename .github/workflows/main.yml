@@ -10,7 +10,7 @@ jobs:
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/node@master
         with:
-         command: test
-        continue-on-error: true
+         command: test, monitor
+         args: --org=prod-team
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
