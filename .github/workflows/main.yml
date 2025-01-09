@@ -10,6 +10,9 @@ jobs:
       - run: cd ..
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/node@master
+        with:
+          command: monitor
+          args: --all-projects
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      - run: snyk monitor --all-projects --org=prod-dem
+   
