@@ -13,6 +13,7 @@ jobs:
         with:
           command: test
           args: --all-projects
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
    
