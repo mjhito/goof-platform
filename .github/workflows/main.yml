@@ -16,11 +16,10 @@ jobs:
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      - name: Run Snyk to check code
-        uses: snyk/actions/node@master
+      - name: Run Snyk to check IaC
+        uses: snyk/actions/iac@master
         with:
-          command: code
-          args: --all-projects
+          command: iac
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
