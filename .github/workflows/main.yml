@@ -14,6 +14,12 @@ jobs:
           command: test
           args: --all-projects
         continue-on-error: true
+      - name: Run Snyk to check code
+        uses: snyk/actions/node@master
+        with:
+          command: code
+          args: --all-projects
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
    
