@@ -1,0 +1,74 @@
+name: PR Status Check Failure Notification
+
+on:
+  check_suite:
+    types: [completed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.check_suite.conclusion == 'failure' }}
+    steps:
+      - name: Get PR Information
+        uses: actions/github-script@v6
+        id: pr_info
+        with:
+          script: |
+            const { owner, repo, check_suite } = context.payload;
+            const { data: pullRequests } = await github.rest.checks.listSuitesForRef({
+              owner,
+              repo,
+              ref: check_suite.head_branch,
+            });
+
+            if (pullRequests && pullRequests.check_suites.length > 0) {
+              const prNumber = pullRequests.check_suites[0].pull_requests[0].number;
+              return { prNumber };
+            } else {
+              return { prNumber: null };
+            }
+
+      - name: Comment on PR
+        if: ${{ steps.pr_info.outputs.prNumber != null }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prNumber = context.steps.pr_info.outputs.prNumber;
+            const message = `🚨 **Status checks failed!** 🚨\n\nOne or more required status checks have failed for this pull request. Please review the checks and address any issues.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: message,
+            });
+
+      - name: Get Author Username
+        if: ${{ steps.pr_info.outputs.prNumber != null }}
+        uses: actions/github-script@v6
+        id: getAuthor
+        with:
+          script: |
+            const prNumber = context.steps.pr_info.outputs.prNumber;
+            const { data: pullRequest } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+            });
+            return {author: pullRequest.user.login};
+
+      - name: Tag the author
+        if: ${{ steps.pr_info.outputs.prNumber != null }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prNumber = context.steps.pr_info.outputs.prNumber;
+            const author = context.steps.getAuthor.outputs.author;
+            const message = `@${author} please check the failed status checks.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: message,
+            });
