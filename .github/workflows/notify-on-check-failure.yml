@@ -1,0 +1,20 @@
+name: Notify PR Author on Status Check Failure
+
+on:
+  status:
+    types: [failure]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check if this is a required status check
+      if: ${{ github.event.status.context == 'required-status-check-name' }}
+      run: |
+        echo "Required status check failed"
+
+    - name: Notify PR author (via comment)
+      uses: peter-evans/slack-notify@v1
+      with:
+        message: "Hi @${{ github.actor }}, one of the required status checks for your PR has failed. Please address the issue."
