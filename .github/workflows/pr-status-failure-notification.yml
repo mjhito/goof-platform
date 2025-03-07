@@ -1,4 +1,4 @@
-name: Notify on Status Check Failure
+name: Notify PR Author on Status Check Failure
 
 on:
   pull_request:
@@ -12,15 +12,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Get PR author details
+        id: pr_details
+        run: |
+          # Get the PR author's GitHub username
+          PR_AUTHOR=$(curl -s \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" | jq -r .user.login)
+          echo "PR Author: $PR_AUTHOR"
+          echo "PR_AUTHOR=$PR_AUTHOR" >> $GITHUB_ENV
+
       - name: Check status of PR
         run: |
+          # Fetch PR status checks
           PR_STATUS=$(curl -s \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/checks")
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/check-runs")
 
-          if [[ $PR_STATUS == *"status: failure"* ]]; then
-            # Send an email, Slack message, or use any notification service here
-            echo "Status Check Failed"
+          # Check if any check failed
+          if [[ $PR_STATUS == *"conclusion\": \"failure\""* ]]; then
+            echo "Status Check Failed. Sending Email..."
+            
+            # Send email via SendGrid API (notify the PR author)
+            curl -X POST https://api.sendgrid.com/v3/mail/send \
+              -H "Authorization: Bearer ${{ secrets.SENDGRID_API_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                    "personalizations": [{
+                      "to": [{"email": "'$PR_AUTHOR'@users.noreply.github.com"}],
+                      "subject": "GitHub PR Status Check Failed"
+                    }],
+                    "from": {"email": "no-reply@example.com"},
+                    "content": [{
+                      "type": "text/plain",
+                      "value": "Hello '$PR_AUTHOR',\n\nThe required status check for your PR (#${{ github.event.pull_request.number }}) has failed. Please check the status checks on GitHub for more details.\n\nBest regards,\nGitHub CI/CD"
+                    }]
+                  }'
           else
             echo "Status Check Passed"
           fi
