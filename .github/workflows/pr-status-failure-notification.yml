@@ -22,32 +22,37 @@ jobs:
           echo "PR Author: $PR_AUTHOR"
           echo "PR_AUTHOR=$PR_AUTHOR" >> $GITHUB_ENV
 
-      - name: Check status of PR
+      - name: Get PR status checks
+        id: pr_status
         run: |
-          # Fetch PR status checks
-          PR_STATUS=$(curl -s \
+          # Fetch the check runs for the PR
+          PR_CHECKS=$(curl -s \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/check-runs")
 
-          # Check if any check failed
-          if [[ $PR_STATUS == *"conclusion\": \"failure\""* ]]; then
-            echo "Status Check Failed. Sending Email..."
-            
-            # Send email via SendGrid API (notify the PR author)
-            curl -X POST https://api.sendgrid.com/v3/mail/send \
-              -H "Authorization: Bearer ${{ secrets.SENDGRID_API_KEY }}" \
-              -H "Content-Type: application/json" \
-              -d '{
-                    "personalizations": [{
-                      "to": [{"email": "'$PR_AUTHOR'@users.noreply.github.com"}],
-                      "subject": "GitHub PR Status Check Failed"
-                    }],
-                    "from": {"email": "no-reply@example.com"},
-                    "content": [{
-                      "type": "text/plain",
-                      "value": "Hello '$PR_AUTHOR',\n\nThe required status check for your PR (#${{ github.event.pull_request.number }}) has failed. Please check the status checks on GitHub for more details.\n\nBest regards,\nGitHub CI/CD"
-                    }]
-                  }'
-          else
-            echo "Status Check Passed"
-          fi
+          # Extract the conclusion of each check run
+          echo "$PR_CHECKS" | jq -r '.check_runs[].conclusion' > conclusions.txt
+
+          # Check if any status check is a failure
+          FAILURE_FOUND=$(grep -c "failure" conclusions.txt)
+          echo "Failures found: $FAILURE_FOUND"
+          echo "FAILURE_FOUND=$FAILURE_FOUND" >> $GITHUB_ENV
+
+      - name: Comment on PR if status check failed
+        if: ${{ env.FAILURE_FOUND > 0 }}
+        run: |
+          echo "Posting a comment on the PR..."
+
+          # Post a comment on the PR notifying the author
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+                  "body": "Hello @'$PR_AUTHOR',\n\nThe required status check for your PR (#${{ github.event.pull_request.number }}) has failed. Please check the status checks on GitHub for more details.\n\nBest regards,\nGitHub CI/CD"
+                }' \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+
+      - name: No status check failure
+        if: ${{ env.FAILURE_FOUND == 0 }}
+        run: |
+          echo "Status Check Passed"
