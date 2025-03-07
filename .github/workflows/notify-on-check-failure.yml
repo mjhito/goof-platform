@@ -49,7 +49,7 @@ jobs:
       id: pr_info
       run: |
         COMMIT_SHA=${{ github.sha }}
-        PR_NUMBER=$(curl -s "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA" | jq -r '.commit.parents[] | select(.sha != null) | .sha' | xargs -I {} curl -s "https://api.github.com/repos/${{ github.repository }}/commits/{}" | jq -r 'select(.commit.message | test("Merge pull request")) | .html_url' | grep -oE "[0-9]+$")
+        PR_NUMBER=$(curl -s "https://api.github.com/search/issues?q=${COMMIT_SHA}+in:head+repo:${{ github.repository }}" | jq -r '.items[0].number')
         
         if [ -z "$PR_NUMBER" ]; then
           echo "No associated PR found for commit $COMMIT_SHA."
