@@ -1,6 +1,9 @@
 name: Notify PR Author on Status Check Failure
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
   status:
     types: [failure]
 
@@ -9,16 +12,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check if PR is related to status
+    - name: Check if PR status is associated with failure
+      run: |
+        echo "Checking if this is related to a PR with failed status..."
+        # Extract the status context name (i.e., the status check name)
+        CONTEXT_NAME="${{ github.event.context }}"
+        echo "Context: $CONTEXT_NAME"
+        
+        # Check if the status is a failure
+        if [ "${{ github.event.state }}" == "failure" ]; then
+          echo "Status check failed for $CONTEXT_NAME."
+        else
+          echo "Status is not failed."
+        fi
+
+    - name: Fetch PR number from status context
       id: pr_info
       run: |
-        # Check if the status context is related to a PR commit
         COMMIT_SHA=${{ github.sha }}
         PR_NUMBER=$(curl -s "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA/pull" | jq -r '.[0].number')
         echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
-        echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
 
-    - name: Post comment on PR
+    - name: Post comment on PR if status failed
       if: ${{ env.PR_NUMBER != 'null' }}
       uses: actions/github-script@v6
       with:
@@ -29,7 +44,7 @@ jobs:
           const owner = context.repo.owner;
           const message = '🚨 One of the required status checks has failed. Please address the issue before proceeding with the PR.';
 
-          // Post comment on the PR
+          // Post a comment on the PR
           await github.issues.createComment({
             owner,
             repo,
@@ -37,6 +52,6 @@ jobs:
             body: message
           });
 
-    - name: Notify if PR number could not be found
+    - name: Notify if no PR is found
       if: ${{ env.PR_NUMBER == 'null' }}
       run: echo "No associated PR found for the failed status check."
