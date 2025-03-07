@@ -1,34 +1,28 @@
-name: Notify PR Author on Status Check Failure
+name: Notify PR Author on Check Failure
 
 on:
   pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
+    types: [opened, synchronize, reopened]
 
 jobs:
-  notify:
+  check-status:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Get PR author details
-        id: pr_details
-        run: |
-          # Get the PR author's GitHub username
-          PR_AUTHOR=$(curl -s \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" | jq -r .user.login)
-          echo "PR Author: $PR_AUTHOR"
-          echo "PR_AUTHOR=$PR_AUTHOR" >> $GITHUB_ENV
+      # Step 1: Checkout code (optional depending on use case)
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      - name: Get PR status checks
-        id: pr_status
+      # Step 2: Fetch the check runs for the PR
+      - name: Fetch PR check runs
+        id: fetch-checks
         run: |
-          # Fetch the check runs for the PR
-          PR_CHECKS=$(curl -s \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          echo "Fetching check runs for PR #${{ github.event.pull_request.number }}"
+
+          PR_CHECKS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/check-runs")
+
+          # Debugging: Print the raw API response
+          echo "PR_CHECKS: $PR_CHECKS"
 
           # Check if the response is null or contains no check runs
           if [[ "$PR_CHECKS" == "null" || "$PR_CHECKS" == "[]" ]]; then
@@ -37,29 +31,33 @@ jobs:
             exit 0
           fi
 
-          # Extract the conclusion of each check run
-          echo "$PR_CHECKS" | jq -r '.check_runs[].conclusion' > conclusions.txt
+          # Safely extract the conclusion of each check run if $PR_CHECKS is not null
+          CONCLUSIONS=$(echo "$PR_CHECKS" | jq -r '.check_runs[].conclusion' 2>/dev/null)
+
+          # Check if jq failed (e.g., no check runs found)
+          if [[ $? -ne 0 || -z "$CONCLUSIONS" ]]; then
+            echo "No check runs or conclusions found."
+            echo "FAILURE_FOUND=0" >> $GITHUB_ENV
+            exit 0
+          fi
 
           # Check if any status check is a failure
-          FAILURE_FOUND=$(grep -c "failure" conclusions.txt)
+          FAILURE_FOUND=$(echo "$CONCLUSIONS" | grep -c "failure")
           echo "Failures found: $FAILURE_FOUND"
           echo "FAILURE_FOUND=$FAILURE_FOUND" >> $GITHUB_ENV
 
-      - name: Post a comment on the PR if status check failed
-        if: ${{ env.FAILURE_FOUND > 0 }}
+      # Step 3: Notify PR author if failure found
+      - name: Notify PR author if failure is found
+        if: env.FAILURE_FOUND != '0'
         run: |
-          echo "Posting a comment on the PR..."
+          PR_AUTHOR=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" | jq -r '.user.login')
 
-          # Post a comment on the PR notifying the author
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-                  "body": "Hello @'$PR_AUTHOR',\n\nThe required status check for your PR (#${{ github.event.pull_request.number }}) has failed. Please check the status checks on GitHub for more details.\n\nBest regards,\nGitHub CI/CD"
-                }' \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+          echo "Notifying PR author: $PR_AUTHOR"
+          
+          # Send a notification to Slack (example, can be customized)
+          curl -X POST -H 'Content-type: application/json' --data \
+            '{"text": "Hi @'"$PR_AUTHOR"', your PR #'"${{ github.event.pull_request.number }}"' has a failing status check."}' \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: No status check failure
-        if: ${{ env.FAILURE_FOUND == 0 }}
-        run: |
-          echo "Status Check Passed"
+          # You can also send an email or other types of notification if desired.
