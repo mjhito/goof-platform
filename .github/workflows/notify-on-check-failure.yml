@@ -12,29 +12,54 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check if PR status is associated with failure
+    - name: Wait for status check to complete
       run: |
-        echo "Checking if this is related to a PR with failed status..."
-        # Extract the status context name (i.e., the status check name)
-        CONTEXT_NAME="${{ github.event.context }}"
-        echo "Context: $CONTEXT_NAME"
+        echo "Waiting for status check to complete..."
+        CHECK_STATUS="pending"
+        RETRY_COUNT=0
+        MAX_RETRIES=10
+        COMMIT_SHA=${{ github.sha }}
         
-        # Check if the status is a failure
-        if [ "${{ github.event.state }}" == "failure" ]; then
-          echo "Status check failed for $CONTEXT_NAME."
+        # Retry logic to check the status every 10 seconds
+        while [[ "$CHECK_STATUS" == "pending" && $RETRY_COUNT -lt $MAX_RETRIES ]]; do
+          echo "Retry $RETRY_COUNT: Checking status for commit $COMMIT_SHA"
+          
+          # Fetch the status of the commit
+          STATUS_RESPONSE=$(curl -s "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA/status")
+          
+          # Extract status from response
+          CHECK_STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.state')
+          
+          if [[ "$CHECK_STATUS" == "failure" || "$CHECK_STATUS" == "success" ]]; then
+            break
+          fi
+          
+          # Wait for 10 seconds before retrying
+          sleep 10
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+        done
+        
+        if [[ "$CHECK_STATUS" == "failure" ]]; then
+          echo "Status check failed. Proceeding to comment on PR."
         else
-          echo "Status is not failed."
+          echo "Status check did not fail or timed out after retries."
         fi
-
-    - name: Fetch PR number from status context
+        
+    - name: Fetch PR number associated with commit
       id: pr_info
       run: |
         COMMIT_SHA=${{ github.sha }}
-        PR_NUMBER=$(curl -s "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA/pull" | jq -r '.[0].number')
+        PR_NUMBER=$(curl -s "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA" | jq -r '.commit.parents[] | select(.sha != null) | .sha' | xargs -I {} curl -s "https://api.github.com/repos/${{ github.repository }}/commits/{}" | jq -r 'select(.commit.message | test("Merge pull request")) | .html_url' | grep -oE "[0-9]+$")
+        
+        if [ -z "$PR_NUMBER" ]; then
+          echo "No associated PR found for commit $COMMIT_SHA."
+        else
+          echo "Associated PR number: $PR_NUMBER"
+        fi
         echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
 
     - name: Post comment on PR if status failed
-      if: ${{ env.PR_NUMBER != 'null' }}
+      if: ${{ env.PR_NUMBER != 'null' && env.PR_NUMBER != '' }}
       uses: actions/github-script@v6
       with:
         script: |
@@ -52,6 +77,6 @@ jobs:
             body: message
           });
 
-    - name: Notify if no PR is found
-      if: ${{ env.PR_NUMBER == 'null' }}
-      run: echo "No associated PR found for the failed status check."
+    - name: Notify if no PR is found or status did not fail
+      if: ${{ env.PR_NUMBER == 'null' || env.PR_NUMBER == '' }}
+      run: echo "No associated PR found for the failed status check or status did not fail."
