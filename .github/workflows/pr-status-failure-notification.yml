@@ -31,18 +31,35 @@ jobs:
           # Fetch the status checks for the commit associated with the PR
           PR_CHECKS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA/status")
-          
+
           # Debugging: Print the raw API response
           echo "PR_CHECKS: $PR_CHECKS"
 
-          # Check if the response is empty or contains no status checks
+          # Retry logic: Check for pending statuses and wait for a bit
+          CHECK_STATUS=$(echo "$PR_CHECKS" | jq -r '.state')
+          if [[ "$CHECK_STATUS" == "pending" ]]; then
+            echo "Status check is still pending. Retrying in 30 seconds..."
+            sleep 30
+            PR_CHECKS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA/status")
+            CHECK_STATUS=$(echo "$PR_CHECKS" | jq -r '.state')
+          fi
+
+          # If the check is still pending after retrying, exit early
+          if [[ "$CHECK_STATUS" == "pending" ]]; then
+            echo "Status check is still pending after retry. Exiting."
+            echo "FAILURE_FOUND=0" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          # Check if the response contains no status checks
           if [[ "$PR_CHECKS" == "null" || "$PR_CHECKS" == "[]" ]]; then
             echo "No status checks found for this PR."
             echo "FAILURE_FOUND=0" >> $GITHUB_ENV
             exit 0
           fi
 
-          # Safely extract the conclusion of each status check (success, failure, etc.)
+          # Extract the conclusion of each status check (success, failure, etc.)
           CONCLUSIONS=$(echo "$PR_CHECKS" | jq -r '.statuses[].state' 2>/dev/null)
 
           # Check if jq failed (e.g., no status checks found)
