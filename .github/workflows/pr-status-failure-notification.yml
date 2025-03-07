@@ -78,14 +78,14 @@ jobs:
       - name: Notify PR author if failure is found
         if: env.FAILURE_FOUND != '0'
         run: |
+          # Get the PR author's username
           PR_AUTHOR=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" | jq -r '.user.login')
 
           echo "Notifying PR author: $PR_AUTHOR"
-          
-          # Send a notification to Slack (example, can be customized)
-          curl -X POST -H 'Content-type: application/json' --data \
-            '{"text": "Hi @'"$PR_AUTHOR"', your PR #'"${{ github.event.pull_request.number }}"' has a failing status check."}' \
-            ${{ secrets.SLACK_WEBHOOK_URL }}
 
-          # You can also send an email or other types of notification if desired.
+          # Post a comment on the PR to notify the PR author
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --data '{"body": "Hi @'"$PR_AUTHOR"', your PR #'"${{ github.event.pull_request.number }}"' has a failing status check."}' \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
