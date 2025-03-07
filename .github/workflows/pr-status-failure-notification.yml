@@ -8,35 +8,46 @@ jobs:
   check-status:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout code (optional depending on use case)
+      # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # Step 2: Fetch the check runs for the PR
-      - name: Fetch PR check runs
+      # Step 2: Fetch the commit SHA associated with the PR
+      - name: Fetch commit SHA for PR
+        id: fetch-sha
+        run: |
+          COMMIT_SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" | jq -r '.head.sha')
+          
+          echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
+          echo "Fetched commit SHA: $COMMIT_SHA"
+
+      # Step 3: Fetch the status checks for the commit
+      - name: Fetch status checks for PR commit
         id: fetch-checks
         run: |
-          echo "Fetching check runs for PR #${{ github.event.pull_request.number }}"
-
+          echo "Fetching status checks for commit $COMMIT_SHA"
+          
+          # Fetch the status checks for the commit associated with the PR
           PR_CHECKS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/check-runs")
-
+            "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA/status")
+          
           # Debugging: Print the raw API response
           echo "PR_CHECKS: $PR_CHECKS"
 
-          # Check if the response is null or contains no check runs
+          # Check if the response is empty or contains no status checks
           if [[ "$PR_CHECKS" == "null" || "$PR_CHECKS" == "[]" ]]; then
-            echo "No check runs found for this PR."
+            echo "No status checks found for this PR."
             echo "FAILURE_FOUND=0" >> $GITHUB_ENV
             exit 0
           fi
 
-          # Safely extract the conclusion of each check run if $PR_CHECKS is not null
-          CONCLUSIONS=$(echo "$PR_CHECKS" | jq -r '.check_runs[].conclusion' 2>/dev/null)
+          # Safely extract the conclusion of each status check (success, failure, etc.)
+          CONCLUSIONS=$(echo "$PR_CHECKS" | jq -r '.statuses[].state' 2>/dev/null)
 
-          # Check if jq failed (e.g., no check runs found)
+          # Check if jq failed (e.g., no status checks found)
           if [[ $? -ne 0 || -z "$CONCLUSIONS" ]]; then
-            echo "No check runs or conclusions found."
+            echo "No status checks or conclusions found."
             echo "FAILURE_FOUND=0" >> $GITHUB_ENV
             exit 0
           fi
@@ -46,7 +57,7 @@ jobs:
           echo "Failures found: $FAILURE_FOUND"
           echo "FAILURE_FOUND=$FAILURE_FOUND" >> $GITHUB_ENV
 
-      # Step 3: Notify PR author if failure found
+      # Step 4: Notify PR author if failure found
       - name: Notify PR author if failure is found
         if: env.FAILURE_FOUND != '0'
         run: |
