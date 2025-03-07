@@ -30,6 +30,13 @@ jobs:
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/check-runs")
 
+          # Check if the response is null or contains no check runs
+          if [[ "$PR_CHECKS" == "null" || "$PR_CHECKS" == "[]" ]]; then
+            echo "No check runs found for this PR."
+            echo "FAILURE_FOUND=0" >> $GITHUB_ENV
+            exit 0
+          fi
+
           # Extract the conclusion of each check run
           echo "$PR_CHECKS" | jq -r '.check_runs[].conclusion' > conclusions.txt
 
@@ -38,7 +45,7 @@ jobs:
           echo "Failures found: $FAILURE_FOUND"
           echo "FAILURE_FOUND=$FAILURE_FOUND" >> $GITHUB_ENV
 
-      - name: Comment on PR if status check failed
+      - name: Post a comment on the PR if status check failed
         if: ${{ env.FAILURE_FOUND > 0 }}
         run: |
           echo "Posting a comment on the PR..."
