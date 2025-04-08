@@ -39,7 +39,7 @@ jobs:
       - name: Check if SARIF file exists
         run: ls -l snyk-oss.sarif
       - name: Upload SARIF file as artifact for inspection
-        uses: actions/upload-artifact@v2.3.0
+        uses: actions/upload-artifact@v3
         with:
           name: snyk-oss-sarif
           path: snyk-oss.sarif
