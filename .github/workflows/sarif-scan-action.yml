@@ -36,6 +36,9 @@ jobs:
       - name: Snyk Open Source Scanning
         run: snyk test --org=${{ secrets.SNYK_ORG }} --all-projects --sarif-file-output=snyk-oss.sarif
         continue-on-error: true
+      - name: Check if SARIF file exists
+        run: ls -l snyk-oss.sarif
+
       - name: Upload results to GitHub Open Source Scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
