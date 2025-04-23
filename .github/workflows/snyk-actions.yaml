@@ -16,6 +16,14 @@ jobs:
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      - name: Run Snyk to monitor for vulnerabilities
+        uses: snyk/actions/node@master
+        with:
+          command: monitor
+          args: --all-projects
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       - name: Run Snyk to check IaC
         uses: snyk/actions/iac@master
         with:
