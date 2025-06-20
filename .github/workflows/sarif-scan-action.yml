@@ -38,7 +38,9 @@ jobs:
         env:
           SNYK_API: ${{ secrets.SNYK_API }}
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --org=${{ secrets.SNYK_ORG }} --all-projects --sarif-file-output=snyk-oss.sarif
+        run: |
+            snyk auth "$SNYK_TOKEN"
+            snyk test --org=${{ secrets.SNYK_ORG }} --all-projects --sarif-file-output=snyk-oss.sarif
         continue-on-error: true
         
       - name: Snyk Open Source Monitor
