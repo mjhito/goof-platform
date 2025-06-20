@@ -15,8 +15,8 @@ jobs:
           args: --all-projects
         continue-on-error: true
         env:
-          SNYK_API: https://api.us.snyk.io
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_API: https://api.us.snyk.io
       - name: Run Snyk to monitor for vulnerabilities
         uses: snyk/actions/node@master
         with:
@@ -24,6 +24,7 @@ jobs:
           args: --all-projects
         continue-on-error: true
         env:
-          SNYK_API: https://api.us.snyk.io
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_API: https://api.us.snyk.io
+      
       
