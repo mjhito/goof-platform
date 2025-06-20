@@ -13,7 +13,10 @@ on: workflow_dispatch
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    env:
+      SNYK_API: https://api.us.snyk.io
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          
     steps:
       - uses: actions/checkout@v2
 
@@ -29,17 +32,17 @@ jobs:
       #- run: snyk config set endpoint='https://app.eu.snyk.io/api'
 
       - name: Setup Snyk
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          SNYK_API: https://api.us.snyk.io
+        
         run: snyk auth "$SNYK_TOKEN"
 
       - name: Snyk Open Source Scanning
         run: snyk test --org=${{ secrets.SNYK_ORG }} --all-projects --sarif-file-output=snyk-oss.sarif
         continue-on-error: true
+        
       - name: Snyk Open Source Monitor
         run: snyk monitor --org=${{ secrets.SNYK_ORG }} --all-projects
         continue-on-error: true
+        
       - name: Check if SARIF file exists
         run: ls -l snyk-oss.sarif
       - name: Upload SARIF file as artifact for inspection
