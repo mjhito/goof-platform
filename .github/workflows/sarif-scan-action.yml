@@ -16,6 +16,8 @@ jobs:
           
     steps:
       - uses: actions/checkout@v2
+        with:
+          ref: maria-patch-test
 
       - name: Use Node.js for installing Snyk
         uses: actions/setup-node@v2
@@ -47,7 +49,7 @@ jobs:
         env:
             SNYK_API: ${{ secrets.SNYK_API }}
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk monitor --org=${{ secrets.SNYK_ORG }} --all-projects
+        run: snyk monitor --org=${{ secrets.SNYK_ORG }} --all-projects --target-reference="$(git branch --show-current)"
         continue-on-error: true
         
       - name: Check if SARIF file exists
