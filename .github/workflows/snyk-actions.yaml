@@ -13,7 +13,7 @@ jobs:
         with:
           command: test
           args: --all-projects
-        continue-on-error: true
+        continue-on-error: false
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       - name: Run Snyk to monitor for vulnerabilities
